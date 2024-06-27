@@ -1,0 +1,313 @@
+% Gemini theme
+% https://github.com/anishathalye/gemini
+
+\documentclass[final,notheorems,noamsthm,20pt]{beamer}
+
+% ====================
+% Packages
+% ====================
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[size=custom,width=120,height=72,scale=1.0]{beamerposter}
+\usetheme{gemini}
+\usecolortheme{gemini}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.14}
+\usepackage{anyfontsize}
+\usepackage{algorithm,algpseudocode}
+\usepackage{amsthm}
+\usepackage{amsmath}
+% \usepackage{cleveref}
+% \crefformat{equation}{Eq. (#1)}
+\usepackage{custom_notation}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+\newtheorem{assumption}{Assumptions}
+\newtheorem{definition}{Definition}
+% \newtheorem{theorem}{Theorem}
+% \newtheorem{proposition}{Proposition}
+% \newtheorem{lemma}{Lemma}
+% \newtheorem{corollary}{Corollary}
+% \newtheorem{fact}{Fact}
+% \newtheorem{example}{Example}
+% \newtheorem{assumption}{Assumption}
+% \newtheorem{remark}{Remark}
+
+% If you have N columns, choose \sepwidth and \colwidth such that
+% (N+1)*\sepwidth + N*\colwidth = \paperwidth
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.3\paperwidth}
+
+\newcommand{\separatorcolumn}{\begin{column}{\sepwidth}\end{column}}
+
+% ====================
+% Title
+% ====================
+
+\title{Adapting to small costs in bandits and online RL}
+
+\author{Alyssa P. Hacker \inst{1} \and Ben Bitdiddle \inst{2} \and Lem E. Tweakit \inst{2}}
+
+\institute[shortinst]{\inst{1} University of Alberta \samelineand \inst{2} Another Institute}
+
+% ====================
+% Footer (optional)
+% ====================
+
+\footercontent{
+    \,  \hfill
+    The second RL theory workshop (co-located with COLT 2024) \hfill
+    \,
+}
+% (can be left out to remove footer)
+
+% ====================
+% Logo (optional)
+% ====================
+
+% use this to include logos on the left and/or right side of the header:
+% \logoright{\includegraphics[height=7cm]{logo1.pdf}}
+\logoleft{\includegraphics[height=7cm]{uofa.pdf}}
+
+% ====================
+% Body
+% ====================
+
+
+\begin{document}
+
+\begin{frame}[t]
+\begin{columns}[t]
+\separatorcolumn
+
+\begin{column}{\colwidth}
+
+  \begin{block}{What is "adapting to small costs"?}
+
+    A decision-maker adapts to small costs in a sequential decision-making
+    problem---where they interact with the same problem repeatedly---if the
+    total cost they incur in the course of its interactions scales with the cost of an optimal decision.
+    In this work, we look at learners for which the cumulative cost over $n$ rounds of interaction
+    (regret, henceforth), denoted $R_n$, can be bounded as
+    $$
+    R_n \curlyeqprec \sqrt{n \eta(a_\star) \Gamma_n} + \Gamma_n\,, 
+    $$
+    where $\curlyeqprec$ denotes inequality up to constant factors, $\eta(a_\star)$ is the cost of an optimal action
+    $a_\star$ and $\Gamma_n$ is a measure of the complexity of the learning task that scales at most logarithmically with $n$.
+    \emph{Observe that when $\eta(a_\star) = 0$, this upper bound on cumulative cost scales at most logarithmically with $n$.}
+  \end{block}
+
+  \begin{block}{$\ell-$ucb algorithm}
+    The setup is as follows:
+    \begin{itemize}
+      \item \textbf{Costs:} $\cP = \{P_a \colon a \in \cA \}$, where $P_a$ is supported on $\R_+$.
+      \item \textbf{n-step regret:}
+        \[
+            R_n = \sum_{t=1}^n \eta(A_t) - \eta(a_\star)
+        \]
+      \item \textbf{Regression function:} $\eta(a) = \int y P_a(dy)$.
+      \item \textbf{Realizability:} $\eta \in \cF \subseteq \R_+^\cA$.
+      \item \textbf{Loss function:} $\ell \colon \R_+^2 \to \R$.
+    \end{itemize}
+
+    \begin{assumption}\label{ass:triangle}
+        For all $a \in\cA$ and $f \in \cF$, for $Y \sim P_a$,
+        $$\Delta(f(a), \eta(a)) \leq \E[\ell(Y,f(a)) - \ell(Y,\eta(a))]\,,$$
+        where $\Delta(x,y) = \frac{(x-y)^2}{x+y}$ is the so-called triangular discrimination between $x$ and $y$.
+    \end{assumption}
+    \begin{assumption}\label{ass:bounded}
+        For a constant $b > 0$, for all $a \in \cA$ and $f \in \cF$, for $Y \sim P_a$,
+        $$
+        |\ell(Y, f(a)) - \ell(Y, \eta(a))| \leq b\,, \quad \text{a.s.}
+        $$
+    \end{assumption}
+    \begin{assumption}\label{ass:self-bounding}
+        For a constant $c > 0$, for all $a \in \cA$ and $f \in \cF$, for $Y \sim P_a$, 
+        $$
+          \Var[\ell(Y, f(a)) - \ell(Y, \eta(a))] \leq c \E[\ell(Y, f(a)) - \ell(Y, \eta(a))]\,.
+        $$
+    \end{assumption}
+
+  \end{block}
+
+  \begin{algorithm}[H]
+        \caption{$\ell$-UCB bandit algorithm}\label{alg:bandit}
+        \begin{algorithmic}
+            \State \textbf{input} loss function $\ell$, model $\cF$, nonnegative confidence widths $(\beta_t)_t$
+            \For{time-step $t \in \Np$}
+              \State let $\cF_t$ be a subset of the model given by
+              $$\cF_t = \left\{f \in \cF \colon \sum_{i=1}^{t-1}
+              \ell(Y_i, f(A_i)) \leq \inf_{\hat f \in \cF} \sum_{i=1}^{t-1}
+              \ell(Y_i, \hat f(A_i)) + \beta_t \right\}\,,$$
+              \State compute an optimistic function $f_t \in \cF_t$ and action $A_t \in \cA$ that satisfy
+              $$
+                f_t(A_t) \leq f(a), \quad \forall (f, a) \in \cF_t \times \cA\,,
+              $$
+              \State and play action $A_t$
+            \EndFor
+        \end{algorithmic}
+    \end{algorithm}
+
+\end{column}
+
+\separatorcolumn
+
+\begin{column}{\colwidth}
+
+  \begin{alertblock}{Master theorem}
+
+    \begin{theorem}
+        A learner using \textbf{Algorithm 1} in our bandit setting over $n$-many interactions with a loss function $\ell$ that satisfies
+        \textbf{Assumptions 1 to 3}, and with confidence widths 
+        $$
+          \beta_t = 5/2 + 15(b+c)\log(N h_t/\delta)\,, \quad t \in \Np\,,
+        $$
+        where $h_t = e + \log(1+t)$ and $N$ denotes the size of the $1/n$-cover of the function class
+        $$
+        \Phi = \{(y,a) \mapsto \ell(y, f(a)) - \ell(y, \eta(a)) \colon f \in \cF \}
+        $$
+        with respect to the uniform metric, incurs regret that is bounded as 
+        $$
+          R_n \leq 3\sqrt{n\eta(a_\star) \Gamma_n} + 6 \Gamma_n
+        $$
+        where $\Gamma_n = d_n(2b + 3\beta_n\log(2bn)) + 2b + 1$, and where $d_n$ is the $1/n$-eluder dimension of the function class
+        $$
+          \bar\Phi = \left\{ a \mapsto \int \phi(y,a) P_a(dy) \colon \phi \in \Phi \right\}\,.
+        $$
+      \end{theorem}
+
+  \end{alertblock}
+
+  \begin{block}{Discussion on the loss functions \& $L_1$-Eluder dimension}
+
+    \begin{example}
+        Assume $Y \in [0,1]$, $\eta = \E[Y]$, and $p\in [0,1]$ almost surely,
+        then we can take $\ell_\log$ to be the \textbf{binary cross entropy loss}
+        \begin{align*}
+            \ell_{\log}(y,p)
+            &=  y \log\frac{1}{p} +
+            (1 -  y)\log\frac{1}{1-p},\\
+            \E[\ell_{\log}(Y,p) - \ell_{\log}(Y,\eta)]
+            &=\kl(\eta,p)
+            \doteq \eta \log\frac{\eta}{p} + (1-\eta) \log \frac{1-\eta}{1-p}.
+        \end{align*}
+    Then, an elementary argument shows that
+    $\kl(\eta,p)\ge \hell^2(\eta,p) \ge \frac14 \Delta(\eta,p)$.
+    \textbf{Assumption 2} also clearly holds.
+    The \textbf{Assumption 3} also holds with $C=?$.
+    \end{example}
+
+    \begin{definition}[$\epsilon$-independence]
+        Let $\Phi$ be a class of real-valued functions on $\cX$ and let $z, x_1, \dotsc, x_n$ be elements of $\cX$. We say $z$ is $\eps$-independent of $x_1, \dotsc, x_n$ with respect to $\Phi$ if there exists a $\phi \in \Phi$ such that $\sum_{t=1}^n |\phi(x_t)| \leq \epsilon$, but $|\phi(z)| > \epsilon$.
+    \end{definition}
+    \begin{definition}[$\epsilon$-eluder sequence]
+        We say that a sequence $x_1, \dotsc, x_n$ in $\cX$ is an $\epsilon$-eluder sequence with respect to $\Phi$ if for all $t \leq n$, $x_t$ is $\epsilon$-independent of $x_1, \dotsc, x_{t-1}$ with respect to $\Phi$.
+    \end{definition}
+    \begin{definition}[$\epsilon$-eluder dimension]\label{def:eluder-dim}
+        For a set $\Phi$ of real-valued functions on $\cX$, the $\eps$-eluder dimension of $\Phi$ is the length of the longest $\omega$-eluder sequence in $\cX$ for any $\omega \geq \eps$.
+    \end{definition}
+
+    \end{block}
+    \begin{exampleblock}{The log-loss example}
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    .\\
+    \end{exampleblock}
+
+\end{column}
+
+\separatorcolumn
+
+\begin{column}{\colwidth}
+
+    \begin{block}{Ellipsoidal Relaxation \& Computational Efficiency}
+        \begin{itemize}
+            \item Consider a parametric model class $\cF = \{f_\theta \colon \theta \in \Theta \}$, $\Theta \subset \Rd$, $\|\theta\|_2 \leq S$.
+            \item For any $(y, a) \in \cY \times \cA$, let $\ell_{(y,a)} \colon \Rd \to \R$ be given by $\theta \mapsto \ell(y, f_\theta(a))$.
+        \end{itemize}
+        \begin{assumption}\label{ass:concordance}
+            Assume that for all $z \in \cY\times \cA$, $\ell_z$ is convex and thrice differentiable Moreover, assume that there exists an $M>0$ such that for all $z \in \cY\times \cA$, $\theta \in \Theta^\circ$ (the interior of $\Theta$) and $u,v \in \Rd$,
+            $$
+            |\langle D_u^3 g_z (\theta) v, v \rangle| \leq M\|u\|_2 \langle \nabla^2 g_z(\theta)v, v\rangle\,,
+            $$
+            where $D^3_u g_z(\theta) \in \R^{d \times d}$ denotes the third directional derivative of $g_z$ at in the direction $u$ evaluated at $\theta$, and $\nabla^2g_z(\theta) \in \R^{d \times d}$ is a matrix of the second order partial derivatives of $g_z$ evaluated at $\theta$.
+        \end{assumption}
+        Let $\cL_t(\theta) = \sum_{i=1}^{t-1} \ell(Y_i, f_\theta(A_i))$ be the empirical risk for a parameter $\theta \in \Theta$ on the first $t-1$ observations, and $\hat\theta_t \in \Theta$ be an ERM. Consider the usual confidence sets
+        $$
+        \Theta_t = \{ \theta \in \Theta \colon \cL_t(\theta) - \cL_t(\hat\theta_t) \leq \beta_t\}\,, \quad \beta_t > 0\,, \quad t \in \Np\,,
+        $$
+        and ellipsoidal confidence sets of the form
+        $$
+        \widetilde\Theta_t = \{ \theta \in \Theta \colon \|\theta - \hat\theta_t\|_{\nabla^2 \cL_t(\hat\theta_t)} \leq \tilde\beta_t\ \}\,,\quad \tilde\beta_t > 0\,,\quad t \in \Np\,.
+        $$
+
+        \begin{theorem}\label{thm:ellipsoidal-sets}
+        Under \textbf{Assumption 4}, whenever $2(1+SM) \beta_t \leq \tilde\beta_t$, $\Theta_t \subset \widetilde\Theta_t$.
+        \end{theorem}
+    \end{block}
+
+    \begin{block}{Small Cost in Online Reinforcement Learning}
+        \begin{algorithm}[H]
+            \caption{The $\ell$-GOLF algorithm}\label{alg:rl}
+            \begin{algorithmic}
+            \State \textbf{input} loss function $\ell$, models $\cF$ and $\cG$, nonnegative confidence widths $(\beta_t)_t$ 
+            \State \textbf{initialize} $\cD_1,\dotsc,\cD_H \leftarrow \{\}$ and $\cB_0 \leftarrow\cF$
+            \For{episode $t \in \N_+$}
+            \State Choose policy $\pi^t = \pi_{f_t}$ where $f_t = \arg\min_{f \in \cB_{t-1}} f(S_1,\pi_f(S_1))$\,.
+            \State Collect trajectory $(S_1,A_1,C_1,\dotsc,S_H, A_H, C_H, S_{H+1})$ by following policy $\pi^t$.
+            \State Append $(S_h,A_h,C_h,S_{h+1})$ to $\cD_h$ for all $h\in[H]$. 
+            \State Update the confidence set 
+            \begin{align*}
+              \cB_t = \left\{f \in \cF : \cL(f_h,f_{h+1};\cD_h) \leq \inf_{g \in \cG_h} \cL(g,f_{h+1};\cD_h) + \beta_t\,, \quad \forall h \in [H]\right\}
+            \end{align*}
+            \State
+            \begin{align*}
+              \text{where }\quad \cL(f,g;\cD_h) = \sum_{(s,a,c,s') \in \cD_h} \ell\left(c + g^\wedge(s'),f(s,a)\right)
+            \end{align*}
+            \EndFor
+            \end{algorithmic}
+        \end{algorithm}
+
+        \begin{assumption}[Realisability] \label{asp:real}
+            $q^\star \in \cF$.
+        \end{assumption}
+
+        \begin{assumption}[Generalised completeness]\label{asp:complete}
+            $\cT \cF_{h+1} \subseteq \cG_h$ for all $h \in [H]$.
+          \end{assumption}
+        \begin{theorem}
+            Under \textbf{Assumptions 5 and 6}, suppose that the loss function composite with $\cF$ and $\cG$ in $\ell$-GOLF satisfy
+            \textbf{Assumptions 1 to 3}.
+            Then if $\beta = \cO(1 + (b+c)\log(N\log(t)/\delta))$ in $\ell$-GOLF, then with probability $1-\delta$
+            \begin{align*}
+                \sum_{t=1}^n v^t_1(S_1) - v^\star_1(S_1) \leq  \mathcal{O}\left(H\sqrt{v^\star_1(S_1) d_e n \beta} + H^2 d_e\beta\right)
+            \end{align*}
+            where $d_e$ is the $\ell_1$ Bellman eluder dimension.
+        \end{theorem}
+    \end{block}
+
+\end{column}
+
+\separatorcolumn
+\end{columns}
+\end{frame}
+
+\end{document}
